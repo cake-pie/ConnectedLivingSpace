@@ -56,6 +56,9 @@ namespace ConnectedLivingSpace
           }
         }
       }
+
+      // Run check for dynamic crew capacity
+      CheckDCC();
     }
 
     public ICLSSpace Space
@@ -253,5 +256,54 @@ namespace ConnectedLivingSpace
       eCrew.Dispose();
       crew.Clear();
     }
+
+    #region Dynamic Crew Capacity
+    // Compatibility for parts with dynamic crew capacity defined in ModuleAnimateGeneric.CrewCapacity
+    private void CheckDCC()
+    {
+      List<ModuleAnimateGeneric> listMAG = part.FindModulesImplementing<ModuleAnimateGeneric>();
+      IEnumerator<ModuleAnimateGeneric> eMAG = listMAG.GetEnumerator();
+      while (eMAG.MoveNext())
+      {
+        if (eMAG.Current.CrewCapacity != 0)
+        {
+          eMAG.Current.OnStop.Add(OnStopHandler);
+          eMAG.Current.OnMoving.Add(OnMovingHandler);
+        }
+      }
+      eMAG.Dispose();
+      listMAG.Clear();
+    }
+
+    private void OnStopHandler (float param) {
+      Debug.Log($"[CLS] OnStopHandler({param}) triggered for part {part.partInfo.name}; capacity: {part.CrewCapacity}.");
+      HandleDCC();
+    }
+    private void OnMovingHandler (float param1, float param2) {
+      Debug.Log($"[CLS] OnMovingHandler({param1},{param2}) triggered for part {part.partInfo.name}; capacity: {part.CrewCapacity}.");
+      HandleDCC();
+    }
+    private void HandleDCC()
+    {
+      List<ModuleAnimateGeneric> listMAG = part.FindModulesImplementing<ModuleAnimateGeneric>();
+      IEnumerator<ModuleAnimateGeneric> eMAG = listMAG.GetEnumerator();
+      while (eMAG.MoveNext())
+      {
+        if (eMAG.Current.CrewCapacity != 0)
+        {
+          eMAG.Current.OnStop.Remove(OnStopHandler);
+          eMAG.Current.OnMoving.Remove(OnMovingHandler);
+        }
+      }
+      eMAG.Dispose();
+      listMAG.Clear();
+
+      if (HighLogic.LoadedSceneIsEditor)
+        CLSAddon.Instance.DelayedUpdateShipConstruct();
+      else
+        part.vessel.GetComponent<CLSVesselModule>().MarkDirty();
+    }
+    #endregion Dynamic Crew Capacity
+
   }
 }
